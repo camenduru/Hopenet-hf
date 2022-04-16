@@ -1,0 +1,6 @@
+[submodule "face_detection"]
+	path = face_detection
+	url = https://github.com/ibug-group/face_detection
+[submodule "deep-head-pose"]
+	path = deep-head-pose
+	url = https://github.com/natanielruiz/deep-head-pose
