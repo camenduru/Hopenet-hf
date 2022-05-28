@@ -163,8 +163,6 @@ def run(image: np.ndarray, model_name: str, face_detector: RetinaFacePredictor,
 
 
 def main():
-    gr.close_all()
-
     args = parse_args()
     device = torch.device(args.device)
 
