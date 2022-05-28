@@ -30,7 +30,7 @@ from ibug.face_detection import RetinaFacePredictor
 
 TITLE = 'natanielruiz/deep-head-pose'
 DESCRIPTION = 'This is an unofficial demo for https://github.com/natanielruiz/deep-head-pose.'
-ARTICLE = None
+ARTICLE = '<center><img src="https://visitor-badge.glitch.me/badge?page_id=hysts.hopenet" alt="visitor badge"/></center>'
 
 TOKEN = os.environ['TOKEN']
 
