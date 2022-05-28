@@ -29,7 +29,7 @@ from hopenet import Hopenet
 from ibug.face_detection import RetinaFacePredictor
 
 TITLE = 'natanielruiz/deep-head-pose'
-DESCRIPTION = 'This is a demo for https://github.com/natanielruiz/deep-head-pose.'
+DESCRIPTION = 'This is an unofficial demo for https://github.com/natanielruiz/deep-head-pose.'
 ARTICLE = None
 
 TOKEN = os.environ['TOKEN']
