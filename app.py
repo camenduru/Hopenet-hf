@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import functools
 import os
 import pathlib
@@ -28,25 +27,10 @@ sys.path.insert(0, 'deep-head-pose/code')
 from hopenet import Hopenet
 from ibug.face_detection import RetinaFacePredictor
 
-TITLE = 'natanielruiz/deep-head-pose'
+TITLE = 'Hopenet'
 DESCRIPTION = 'This is an unofficial demo for https://github.com/natanielruiz/deep-head-pose.'
-ARTICLE = '<center><img src="https://visitor-badge.glitch.me/badge?page_id=hysts.hopenet" alt="visitor badge"/></center>'
 
-TOKEN = os.environ['TOKEN']
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--device', type=str, default='cpu')
-    parser.add_argument('--theme', type=str)
-    parser.add_argument('--live', action='store_true')
-    parser.add_argument('--share', action='store_true')
-    parser.add_argument('--port', type=int)
-    parser.add_argument('--disable-queue',
-                        dest='enable_queue',
-                        action='store_false')
-    parser.add_argument('--allow-flagging', type=str, default='never')
-    return parser.parse_args()
+HF_TOKEN = os.getenv('HF_TOKEN')
 
 
 def load_sample_images() -> list[pathlib.Path]:
@@ -59,7 +43,7 @@ def load_sample_images() -> list[pathlib.Path]:
             path = huggingface_hub.hf_hub_download(dataset_repo,
                                                    name,
                                                    repo_type='dataset',
-                                                   use_auth_token=TOKEN)
+                                                   use_auth_token=HF_TOKEN)
             with tarfile.open(path) as f:
                 f.extractall(image_dir.as_posix())
     return sorted(image_dir.rglob('*.jpg'))
@@ -68,7 +52,7 @@ def load_sample_images() -> list[pathlib.Path]:
 def load_model(model_name: str, device: torch.device) -> nn.Module:
     path = huggingface_hub.hf_hub_download('hysts/Hopenet',
                                            f'models/{model_name}.pkl',
-                                           use_auth_token=TOKEN)
+                                           use_auth_token=HF_TOKEN)
     state_dict = torch.load(path, map_location='cpu')
     model = Hopenet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], 66)
     model.load_state_dict(state_dict)
@@ -162,57 +146,40 @@ def run(image: np.ndarray, model_name: str, face_detector: RetinaFacePredictor,
     return res[:, :, ::-1]
 
 
-def main():
-    args = parse_args()
-    device = torch.device(args.device)
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+face_detector = RetinaFacePredictor(
+    threshold=0.8,
+    device=device,
+    model=RetinaFacePredictor.get_model('mobilenet0.25'))
 
-    face_detector = RetinaFacePredictor(
-        threshold=0.8,
-        device=device,
-        model=RetinaFacePredictor.get_model('mobilenet0.25'))
+model_names = [
+    'hopenet_alpha1',
+    'hopenet_alpha2',
+    'hopenet_robust_alpha1',
+]
+models = {name: load_model(name, device) for name in model_names}
+transform = create_transform()
 
-    model_names = [
-        'hopenet_alpha1',
-        'hopenet_alpha2',
-        'hopenet_robust_alpha1',
-    ]
-    models = {name: load_model(name, device) for name in model_names}
+func = functools.partial(run,
+                         face_detector=face_detector,
+                         models=models,
+                         transform=transform,
+                         device=device)
 
-    transform = create_transform()
+image_paths = load_sample_images()
+examples = [[path.as_posix(), model_names[0]] for path in image_paths]
 
-    func = functools.partial(run,
-                             face_detector=face_detector,
-                             models=models,
-                             transform=transform,
-                             device=device)
-    func = functools.update_wrapper(func, run)
-
-    image_paths = load_sample_images()
-    examples = [[path.as_posix(), model_names[0]] for path in image_paths]
-
-    gr.Interface(
-        func,
-        [
-            gr.inputs.Image(type='numpy', label='Input'),
-            gr.inputs.Radio(model_names,
-                            type='value',
-                            default=model_names[0],
-                            label='Model'),
-        ],
-        gr.outputs.Image(type='numpy', label='Output'),
-        examples=examples,
-        title=TITLE,
-        description=DESCRIPTION,
-        article=ARTICLE,
-        theme=args.theme,
-        allow_flagging=args.allow_flagging,
-        live=args.live,
-    ).launch(
-        enable_queue=args.enable_queue,
-        server_port=args.port,
-        share=args.share,
-    )
-
-
-if __name__ == '__main__':
-    main()
+gr.Interface(
+    fn=func,
+    inputs=[
+        gr.Image(type='numpy', label='Input'),
+        gr.Radio(model_names,
+                 type='value',
+                 default=model_names[0],
+                 label='Model'),
+    ],
+    outputs=gr.Image(type='numpy', label='Output'),
+    examples=examples,
+    title=TITLE,
+    description=DESCRIPTION,
+).launch(show_api=False)
