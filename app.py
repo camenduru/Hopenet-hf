@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import functools
 import os
-import pathlib
 import sys
-import tarfile
 from typing import Callable
 
 import cv2
@@ -27,32 +25,12 @@ sys.path.insert(0, 'deep-head-pose/code')
 from hopenet import Hopenet
 from ibug.face_detection import RetinaFacePredictor
 
-TITLE = 'Hopenet'
-DESCRIPTION = 'This is an unofficial demo for https://github.com/natanielruiz/deep-head-pose.'
-
-HF_TOKEN = os.getenv('HF_TOKEN')
-
-
-def load_sample_images() -> list[pathlib.Path]:
-    image_dir = pathlib.Path('images')
-    if not image_dir.exists():
-        image_dir.mkdir()
-        dataset_repo = 'hysts/input-images'
-        filenames = ['001.tar']
-        for name in filenames:
-            path = huggingface_hub.hf_hub_download(dataset_repo,
-                                                   name,
-                                                   repo_type='dataset',
-                                                   use_auth_token=HF_TOKEN)
-            with tarfile.open(path) as f:
-                f.extractall(image_dir.as_posix())
-    return sorted(image_dir.rglob('*.jpg'))
+DESCRIPTION = '# [Hopenet](https://github.com/natanielruiz/deep-head-pose)'
 
 
 def load_model(model_name: str, device: torch.device) -> nn.Module:
-    path = huggingface_hub.hf_hub_download('hysts/Hopenet',
-                                           f'models/{model_name}.pkl',
-                                           use_auth_token=HF_TOKEN)
+    path = huggingface_hub.hf_hub_download('public-data/Hopenet',
+                                           f'models/{model_name}.pkl')
     state_dict = torch.load(path, map_location='cpu')
     model = Hopenet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], 66)
     model.load_state_dict(state_dict)
@@ -160,26 +138,33 @@ model_names = [
 models = {name: load_model(name, device) for name in model_names}
 transform = create_transform()
 
-func = functools.partial(run,
-                         face_detector=face_detector,
-                         models=models,
-                         transform=transform,
-                         device=device)
+fn = functools.partial(run,
+                       face_detector=face_detector,
+                       models=models,
+                       transform=transform,
+                       device=device)
 
-image_paths = load_sample_images()
-examples = [[path.as_posix(), model_names[0]] for path in image_paths]
+examples = [['images/pexels-ksenia-chernaya-8535230.jpg', 'hopenet_alpha1']]
 
-gr.Interface(
-    fn=func,
-    inputs=[
-        gr.Image(type='numpy', label='Input'),
-        gr.Radio(model_names,
-                 type='value',
-                 default=model_names[0],
-                 label='Model'),
-    ],
-    outputs=gr.Image(type='numpy', label='Output'),
-    examples=examples,
-    title=TITLE,
-    description=DESCRIPTION,
-).launch(show_api=False)
+with gr.Blocks(css='style.css') as demo:
+    gr.Markdown(DESCRIPTION)
+    with gr.Row():
+        with gr.Column():
+            image = gr.Image(label='Input', type='numpy')
+            model_name = gr.Radio(label='Model',
+                                  choices=model_names,
+                                  type='value',
+                                  value=model_names[0])
+            run_button = gr.Button('Run')
+        with gr.Column():
+            result = gr.Image(label='Output')
+    gr.Examples(examples=examples,
+                inputs=[image, model_name],
+                outputs=result,
+                fn=fn,
+                cache_examples=os.getenv('CACHE_EXAMPLES') == '1')
+    run_button.click(fn=fn,
+                     inputs=[image, model_name],
+                     outputs=result,
+                     api_name='run')
+demo.queue().launch()
